@@ -38,10 +38,10 @@ graph TD
         TUNNEL[CF Tunnel / Proxy<br/>secretary.yourdomain.com/mcp]
     end
 
-    subgraph Consumers
+    subgraph Consumers["Coding Agent Hosts"]
         CC[Claude Code]
         CUR[Cursor]
-        CEE[Ceetrix Agents]
+        OTHER[Other MCP clients]
     end
 
     DG -- messageCreate --> BOT
@@ -54,7 +54,7 @@ graph TD
     MCP -- :3100 --> TUNNEL
     TUNNEL --> CC
     TUNNEL --> CUR
-    TUNNEL --> CEE
+    TUNNEL --> OTHER
 ```
 
 ## Data Model
@@ -405,7 +405,6 @@ MCP connections need auth. Options:
 
 1. **Bearer token** — simplest, shared secret per agent. Good enough for personal use.
 2. **Cloudflare Access** — service token auth at the edge. Better for multi-user.
-3. **Ceetrix auth** — if this becomes a Ceetrix module, use Ceetrix's existing GitHub OAuth flow.
 
 ## Project Structure
 
@@ -493,7 +492,6 @@ Total Hetzner cost: ~€4-8/month for a CX22/CX32. Gemini costs negligible. Clou
 1. **Digest delivery** — Post daily/weekly digests back to a Discord channel? Or keep it pull-only via MCP?
 2. **Embedding search** — For v1, `pg_trgm` + `ts_vector` is fine. If entity count grows past ~10K, add `pgvector` for semantic search.
 3. **Cross-server** — Data model supports multi-guild. MCP auth would need scoping.
-4. **Ceetrix integration** — The knowledge base is a natural complement to Ceetrix's delivery gates. An agent working on a Ceetrix project could query "what decisions were made about X in Discord?" as part of gate evidence.
-5. **Conversation threading** — Discord threads are first-class. Thread messages should be grouped and extracted as coherent units rather than interleaved with main channel traffic.
-6. **Retroactive re-extraction** — When you improve the extraction prompt, you'll want to re-run it over historical data. The extraction_runs table supports this — just create new runs over old windows.
-7. **Human correction loop** — An MCP tool like `correct_entity(id, corrections)` that lets an agent (or human via bot command) fix misclassifications feeds back into extraction quality.
+4. **Conversation threading** — Discord threads are first-class. Thread messages should be grouped and extracted as coherent units rather than interleaved with main channel traffic.
+5. **Retroactive re-extraction** — When you improve the extraction prompt, you'll want to re-run it over historical data. The extraction_runs table supports this — just create new runs over old windows.
+6. **Human correction loop** — An MCP tool like `correct_entity(id, corrections)` that lets an agent (or human via bot command) fix misclassifications feeds back into extraction quality.
