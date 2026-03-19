@@ -1,0 +1,65 @@
+services:
+  postgres:
+    image: postgres:17
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: secretary
+      POSTGRES_USER: secretary
+      POSTGRES_PASSWORD: ${PG_PASSWORD}
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U secretary"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  bot:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DISCORD_TOKEN: ${DISCORD_TOKEN}
+      DATABASE_URL: postgres://secretary:${PG_PASSWORD}@postgres:5432/secretary
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      EXTRACTION_INTERVAL_MINS: ${EXTRACTION_INTERVAL_MINS:-60}
+      MCP_AUTH_TOKEN: ${MCP_AUTH_TOKEN}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    restart: unless-stopped
+
+  mcp:
+    build: .
+    command: ["node", "dist/mcp/server.js"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://secretary:${PG_PASSWORD}@postgres:5432/secretary
+      MCP_AUTH_TOKEN: ${MCP_AUTH_TOKEN}
+      MCP_PORT: 3100
+      DISCORD_TOKEN: unused
+      GEMINI_API_KEY: unused
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "3100:3100"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3100/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel run
+    environment:
+      TUNNEL_TOKEN: ${CF_TUNNEL_TOKEN}
+    restart: unless-stopped
+    profiles:
+      - production
+
+volumes:
+  pgdata:
