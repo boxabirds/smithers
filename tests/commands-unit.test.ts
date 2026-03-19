@@ -8,6 +8,9 @@ import {
   formatStatusEmbed,
   formatErrorEmbed,
   formatUptime,
+  formatSearchResultsEmbed,
+  formatCorrectionEmbed,
+  formatMergeEmbed,
 } from '../src/bot/commands/formatters.js';
 import { buildCommandDefinitions } from '../src/bot/commands/register.js';
 import { KNOWN_COMMAND_NAMES } from '../src/bot/commands/index.js';
@@ -16,7 +19,15 @@ import {
   EMBED_FIELD_MAX_LENGTH,
   EMPTY_MESSAGES,
   DEFAULT_LOOKBACK_DAYS,
+  VALID_ENTITY_TYPES,
+  MAX_SEARCH_RESULTS,
 } from '../src/bot/commands/constants.js';
+
+/** Number of total slash commands (original 6 + search + correct) */
+const TOTAL_COMMAND_COUNT = 8;
+
+/** Number of subcommands under /correct */
+const CORRECT_SUBCOMMAND_COUNT = 5;
 
 // ─── Formatter Tests ──────────────────────────────────────────────
 
@@ -233,18 +244,137 @@ describe('formatUptime', () => {
   });
 });
 
+// ─── Search & Correction Formatter Tests ─────────────────────────
+
+describe('formatSearchResultsEmbed', () => {
+  it('shows empty-state message when no results', () => {
+    const embed = formatSearchResultsEmbed([], 'auth');
+    const json = embed.toJSON();
+    expect(json.description).toBe(EMPTY_MESSAGES.SEARCH);
+    expect(json.color).toBe(EMBED_COLOURS.SEARCH);
+    expect(json.title).toContain('auth');
+  });
+
+  it('lists results with ID, type, title, and status', () => {
+    const embed = formatSearchResultsEmbed(
+      [
+        { id: 1, type: 'action', title: 'Deploy auth', status: 'open' },
+        { id: 2, type: 'decision', title: 'Use PostgreSQL', status: 'resolved' },
+      ],
+      'auth',
+    );
+    const json = embed.toJSON();
+    expect(json.description).toContain('#1');
+    expect(json.description).toContain('[action]');
+    expect(json.description).toContain('Deploy auth');
+    expect(json.description).toContain('(open)');
+    expect(json.description).toContain('#2');
+    expect(json.description).toContain('[decision]');
+    expect(json.description).toContain('(resolved)');
+    expect(json.footer?.text).toBe('2 result(s)');
+  });
+
+  it('truncates long titles in results', () => {
+    const longTitle = 'B'.repeat(300);
+    const embed = formatSearchResultsEmbed(
+      [{ id: 1, type: 'project', title: longTitle, status: 'open' }],
+      'test',
+    );
+    const json = embed.toJSON();
+    expect(json.description).toContain('...');
+  });
+});
+
+describe('formatCorrectionEmbed', () => {
+  it('shows retype correction with before and after', () => {
+    const embed = formatCorrectionEmbed('retype', 42, 'Deploy auth', 'decision', 'action', '12345');
+    const json = embed.toJSON();
+    expect(json.title).toBe('Correction: retype');
+    expect(json.color).toBe(EMBED_COLOURS.CORRECT);
+    expect(json.description).toContain('#42');
+    expect(json.description).toContain('Deploy auth');
+    expect(json.description).toContain('decision');
+    expect(json.description).toContain('action');
+    expect(json.description).toContain('<@12345>');
+  });
+
+  it('shows retitle correction with old and new title', () => {
+    const embed = formatCorrectionEmbed('retitle', 10, 'New Title', 'Old Title', 'New Title', '99');
+    const json = embed.toJSON();
+    expect(json.title).toBe('Correction: retitle');
+    expect(json.description).toContain('Old Title');
+    expect(json.description).toContain('New Title');
+  });
+
+  it('shows resolve correction', () => {
+    const embed = formatCorrectionEmbed('resolve', 5, 'Some question', 'open', 'resolved', '88');
+    const json = embed.toJSON();
+    expect(json.title).toBe('Correction: resolve');
+    expect(json.description).toContain('open');
+    expect(json.description).toContain('resolved');
+  });
+
+  it('shows delete correction', () => {
+    const embed = formatCorrectionEmbed('delete', 7, 'Bad entity', 'active', 'deleted', '77');
+    const json = embed.toJSON();
+    expect(json.title).toBe('Correction: delete');
+    expect(json.description).toContain('active');
+    expect(json.description).toContain('deleted');
+  });
+});
+
+describe('formatMergeEmbed', () => {
+  it('shows source merged into target with mention count', () => {
+    const embed = formatMergeEmbed(
+      { id: 1, title: 'Duplicate entity' },
+      { id: 2, title: 'Original entity', mentions: 8 },
+      '12345',
+    );
+    const json = embed.toJSON();
+    expect(json.title).toBe('Correction: merge');
+    expect(json.color).toBe(EMBED_COLOURS.CORRECT);
+    expect(json.description).toContain('#1');
+    expect(json.description).toContain('Duplicate entity');
+    expect(json.description).toContain('(deleted)');
+    expect(json.description).toContain('#2');
+    expect(json.description).toContain('Original entity');
+    expect(json.description).toContain('8');
+    expect(json.description).toContain('<@12345>');
+  });
+});
+
+// ─── Constants Tests ─────────────────────────────────────────────
+
+describe('VALID_ENTITY_TYPES', () => {
+  it('contains all 6 entity types', () => {
+    expect(VALID_ENTITY_TYPES).toHaveLength(6);
+    expect(VALID_ENTITY_TYPES).toContain('project');
+    expect(VALID_ENTITY_TYPES).toContain('action');
+    expect(VALID_ENTITY_TYPES).toContain('question');
+    expect(VALID_ENTITY_TYPES).toContain('decision');
+    expect(VALID_ENTITY_TYPES).toContain('concept');
+    expect(VALID_ENTITY_TYPES).toContain('resource');
+  });
+});
+
+describe('MAX_SEARCH_RESULTS', () => {
+  it('is a positive number', () => {
+    expect(MAX_SEARCH_RESULTS).toBeGreaterThan(0);
+  });
+});
+
 // ─── Command Definition Tests ─────────────────────────────────────
 
 describe('buildCommandDefinitions', () => {
   const commands = buildCommandDefinitions();
 
-  it('defines exactly 6 commands', () => {
-    expect(commands).toHaveLength(6);
+  it(`defines exactly ${TOTAL_COMMAND_COUNT} commands`, () => {
+    expect(commands).toHaveLength(TOTAL_COMMAND_COUNT);
   });
 
   it('has all expected command names', () => {
     const names = commands.map((c) => c.name);
-    expect(names).toEqual(['actions', 'questions', 'digest', 'projects', 'decisions', 'status']);
+    expect(names).toEqual(['actions', 'questions', 'digest', 'projects', 'decisions', 'status', 'search', 'correct']);
   });
 
   it('actions command has optional string assignee parameter', () => {
@@ -283,15 +413,69 @@ describe('buildCommandDefinitions', () => {
       expect(json.options ?? []).toHaveLength(0);
     }
   });
+
+  it('search command has required query string parameter', () => {
+    const search = commands.find((c) => c.name === 'search')!;
+    const json = search.toJSON();
+    const queryOpt = json.options?.find((o: Record<string, unknown>) => o.name === 'query');
+    expect(queryOpt).toBeDefined();
+    expect(queryOpt!.required).toBe(true);
+    // ApplicationCommandOptionType.String = 3
+    expect(queryOpt!.type).toBe(3);
+  });
+
+  it(`correct command has exactly ${CORRECT_SUBCOMMAND_COUNT} subcommands`, () => {
+    const correct = commands.find((c) => c.name === 'correct')!;
+    const json = correct.toJSON();
+    // ApplicationCommandOptionType.Subcommand = 1
+    const subcommands = json.options?.filter((o: Record<string, unknown>) => o.type === 1) ?? [];
+    expect(subcommands).toHaveLength(CORRECT_SUBCOMMAND_COUNT);
+    const names = subcommands.map((s: Record<string, unknown>) => s.name);
+    expect(names).toEqual(expect.arrayContaining(['retype', 'retitle', 'resolve', 'delete', 'merge']));
+  });
+
+  it('correct retype subcommand has entity_id (integer) and new_type (string with choices)', () => {
+    const correct = commands.find((c) => c.name === 'correct')!;
+    const json = correct.toJSON();
+    const retype = json.options?.find((o: Record<string, unknown>) => o.name === 'retype') as Record<string, unknown>;
+    expect(retype).toBeDefined();
+    const retypeOptions = retype.options as Record<string, unknown>[];
+    const entityIdOpt = retypeOptions.find((o) => o.name === 'entity_id');
+    expect(entityIdOpt).toBeDefined();
+    expect(entityIdOpt!.required).toBe(true);
+    // ApplicationCommandOptionType.Integer = 4
+    expect(entityIdOpt!.type).toBe(4);
+    const newTypeOpt = retypeOptions.find((o) => o.name === 'new_type');
+    expect(newTypeOpt).toBeDefined();
+    expect(newTypeOpt!.required).toBe(true);
+    expect(newTypeOpt!.type).toBe(3); // String
+    expect((newTypeOpt!.choices as unknown[]).length).toBe(VALID_ENTITY_TYPES.length);
+  });
+
+  it('correct merge subcommand has entity_id and into_entity_id (both integer)', () => {
+    const correct = commands.find((c) => c.name === 'correct')!;
+    const json = correct.toJSON();
+    const merge = json.options?.find((o: Record<string, unknown>) => o.name === 'merge') as Record<string, unknown>;
+    expect(merge).toBeDefined();
+    const mergeOptions = merge.options as Record<string, unknown>[];
+    const entityIdOpt = mergeOptions.find((o) => o.name === 'entity_id');
+    expect(entityIdOpt).toBeDefined();
+    expect(entityIdOpt!.type).toBe(4);
+    expect(entityIdOpt!.required).toBe(true);
+    const intoOpt = mergeOptions.find((o) => o.name === 'into_entity_id');
+    expect(intoOpt).toBeDefined();
+    expect(intoOpt!.type).toBe(4);
+    expect(intoOpt!.required).toBe(true);
+  });
 });
 
 // ─── Router Tests ─────────────────────────────────────────────────
 
 describe('KNOWN_COMMAND_NAMES', () => {
-  it('includes all 6 command names', () => {
+  it(`includes all ${TOTAL_COMMAND_COUNT} command names`, () => {
     expect(KNOWN_COMMAND_NAMES).toEqual(
-      expect.arrayContaining(['actions', 'questions', 'digest', 'projects', 'decisions', 'status']),
+      expect.arrayContaining(['actions', 'questions', 'digest', 'projects', 'decisions', 'status', 'search', 'correct']),
     );
-    expect(KNOWN_COMMAND_NAMES).toHaveLength(6);
+    expect(KNOWN_COMMAND_NAMES).toHaveLength(TOTAL_COMMAND_COUNT);
   });
 });

@@ -167,3 +167,69 @@ export function formatErrorEmbed(message: string): EmbedBuilder {
     .setColor(EMBED_COLOURS.ERROR)
     .setDescription(message);
 }
+
+// ─── Search & Correction Formatters ──────────────────────────────
+
+export interface SearchResultEntity {
+  id: number;
+  type: string;
+  title: string;
+  status: string;
+}
+
+export function formatSearchResultsEmbed(
+  results: SearchResultEntity[],
+  query: string,
+): EmbedBuilder {
+  const embed = new EmbedBuilder()
+    .setTitle(`Search Results: "${truncate(query, EMBED_FIELD_MAX_LENGTH)}"`)
+    .setColor(EMBED_COLOURS.SEARCH);
+
+  if (results.length === 0) {
+    return embed.setDescription(EMPTY_MESSAGES.SEARCH);
+  }
+
+  const lines = results.map((r) =>
+    `• **#${r.id}** [${r.type}] ${truncate(r.title, EMBED_FIELD_MAX_LENGTH)} _(${r.status})_`,
+  );
+
+  const description = truncate(lines.join('\n'), EMBED_DESCRIPTION_MAX_LENGTH);
+  return embed
+    .setDescription(description)
+    .setFooter({ text: `${results.length} result(s)` });
+}
+
+export function formatCorrectionEmbed(
+  operation: string,
+  entityId: number,
+  entityTitle: string,
+  before: string,
+  after: string,
+  userId: string,
+): EmbedBuilder {
+  return new EmbedBuilder()
+    .setTitle(`Correction: ${operation}`)
+    .setColor(EMBED_COLOURS.CORRECT)
+    .setDescription(
+      `**Entity:** #${entityId} — ${truncate(entityTitle, EMBED_FIELD_MAX_LENGTH)}\n` +
+      `**Before:** ${before}\n` +
+      `**After:** ${after}\n` +
+      `**Corrected by:** <@${userId}>`,
+    );
+}
+
+export function formatMergeEmbed(
+  source: { id: number; title: string },
+  target: { id: number; title: string; mentions: number },
+  userId: string,
+): EmbedBuilder {
+  return new EmbedBuilder()
+    .setTitle('Correction: merge')
+    .setColor(EMBED_COLOURS.CORRECT)
+    .setDescription(
+      `**Source:** #${source.id} — ${truncate(source.title, EMBED_FIELD_MAX_LENGTH)} _(deleted)_\n` +
+      `**Target:** #${target.id} — ${truncate(target.title, EMBED_FIELD_MAX_LENGTH)}\n` +
+      `**Combined mentions:** ${target.mentions}\n` +
+      `**Merged by:** <@${userId}>`,
+    );
+}

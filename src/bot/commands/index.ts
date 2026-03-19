@@ -7,6 +7,8 @@ import {
   handleProjectsCommand,
   handleDecisionsCommand,
   handleStatusCommand,
+  handleSearchCommand,
+  handleCorrectCommand,
 } from './handlers.js';
 import { formatErrorEmbed } from './formatters.js';
 
@@ -23,6 +25,8 @@ const COMMAND_MAP: Record<string, CommandHandler> = {
   projects: handleProjectsCommand,
   decisions: handleDecisionsCommand,
   status: handleStatusCommand,
+  search: handleSearchCommand,
+  correct: handleCorrectCommand,
 };
 
 export const KNOWN_COMMAND_NAMES = Object.keys(COMMAND_MAP);

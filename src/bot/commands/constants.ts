@@ -16,6 +16,19 @@ export const MS_PER_DAY = 86_400_000;
 /** Minimum allowed value for the days parameter */
 export const MIN_DAYS_PARAM = 1;
 
+/** Maximum number of search results to display */
+export const MAX_SEARCH_RESULTS = 20;
+
+/** Valid entity types for the extraction system */
+export const VALID_ENTITY_TYPES = [
+  'project',
+  'action',
+  'question',
+  'decision',
+  'concept',
+  'resource',
+] as const;
+
 /** Embed colours by command type */
 export const EMBED_COLOURS = {
   ACTIONS: 0x5865F2,   // Blurple
@@ -25,6 +38,8 @@ export const EMBED_COLOURS = {
   DECISIONS: 0xED4245, // Red
   STATUS: 0x5865F2,    // Blurple
   ERROR: 0xED4245,     // Red
+  SEARCH: 0x5865F2,    // Blurple
+  CORRECT: 0x57F287,   // Green
 } as const;
 
 /** Empty-state messages */
@@ -34,4 +49,5 @@ export const EMPTY_MESSAGES = {
   DIGEST: (days: number) => `No activity in the last ${days} days.`,
   PROJECTS: 'No active projects found.',
   DECISIONS: (days: number) => `No recent decisions in the last ${days} days.`,
+  SEARCH: 'No entities found matching your query.',
 } as const;

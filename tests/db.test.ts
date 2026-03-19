@@ -4,6 +4,9 @@ import { runMigrations } from '../src/db/migrate.js';
 
 const TEST_DB_URL = process.env.DATABASE_URL || 'postgres://secretary:secretpassword@localhost:5432/secretary';
 
+/** Total number of SQL migration files in src/db/migrations/ */
+const TOTAL_MIGRATION_COUNT = 2;
+
 describe('Database', () => {
   let pool: pg.Pool;
 
@@ -23,7 +26,7 @@ describe('Database', () => {
   it('runs migrations successfully', async () => {
     const result = await runMigrations(pool);
     // Either applies fresh (on empty DB) or skips (already applied)
-    expect(result.total).toBe(1);
+    expect(result.total).toBe(TOTAL_MIGRATION_COUNT);
   });
 
   it('creates all expected tables', async () => {
@@ -39,12 +42,13 @@ describe('Database', () => {
     expect(tables).toContain('entity_evidence');
     expect(tables).toContain('guild_config');
     expect(tables).toContain('schema_migrations');
+    expect(tables).toContain('entity_corrections');
   });
 
   it('runs migrations idempotently', async () => {
     const result = await runMigrations(pool);
     expect(result.applied.length).toBe(0);
-    expect(result.total).toBe(1);
+    expect(result.total).toBe(TOTAL_MIGRATION_COUNT);
   });
 
   it('has pg_trgm extension enabled', async () => {
@@ -86,5 +90,6 @@ describe('Database', () => {
     expect(cols).toContain('status');
     expect(cols).toContain('confidence');
     expect(cols).toContain('metadata');
+    expect(cols).toContain('deleted_at');
   });
 });
