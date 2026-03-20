@@ -16,6 +16,9 @@ export const MS_PER_DAY = 86_400_000;
 /** Minimum allowed value for the days parameter */
 export const MIN_DAYS_PARAM = 1;
 
+/** Maximum length for body text displayed beneath entity titles */
+export const MAX_BODY_DISPLAY_LENGTH = 120;
+
 /** Maximum number of search results to display */
 export const MAX_SEARCH_RESULTS = 20;
 

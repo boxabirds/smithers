@@ -519,6 +519,83 @@ describe('formatHelpEmbed', () => {
   });
 });
 
+// ─── Body Display Tests ──────────────────────────────────────────
+
+describe('entity body display in formatters', () => {
+  it('actions embed shows body beneath title', () => {
+    const embed = formatActionsEmbed({
+      actions: [{ title: 'Deploy auth', body: 'Deploy the auth service to staging', metadata: {} }],
+      count: 1,
+    });
+    const desc = embed.toJSON().description!;
+    expect(desc).toContain('Deploy auth');
+    expect(desc).toContain('Deploy the auth service to staging');
+  });
+
+  it('actions embed omits body line when body is null', () => {
+    const embed = formatActionsEmbed({
+      actions: [{ title: 'No body action', body: null, metadata: {} }],
+      count: 1,
+    });
+    const desc = embed.toJSON().description!;
+    expect(desc).toContain('No body action');
+    // Should be a single line, no indented second line
+    const lines = desc.split('\n');
+    expect(lines).toHaveLength(1);
+  });
+
+  it('questions embed shows body beneath title', () => {
+    const embed = formatQuestionsEmbed({
+      questions: [{ title: 'Which provider?', body: 'Team is debating AWS vs GCP for staging', first_seen: '2025-06-01' }],
+      count: 1,
+    });
+    const desc = embed.toJSON().description!;
+    expect(desc).toContain('Which provider?');
+    expect(desc).toContain('Team is debating AWS vs GCP');
+  });
+
+  it('projects embed shows body beneath title', () => {
+    const embed = formatProjectsEmbed({
+      projects: [{ title: 'Auth Migration', body: 'Moving from session tokens to JWTs', mentions: 5 }],
+      count: 1,
+    });
+    const desc = embed.toJSON().description!;
+    expect(desc).toContain('Auth Migration');
+    expect(desc).toContain('Moving from session tokens to JWTs');
+  });
+
+  it('decisions embed shows body beneath title', () => {
+    const embed = formatDecisionsEmbed({
+      decisions: [{ title: 'Use Postgres', body: 'Team agreed Postgres over MySQL for the main database', last_seen: '2025-06-01' }],
+      count: 1,
+    }, 7);
+    const desc = embed.toJSON().description!;
+    expect(desc).toContain('Use Postgres');
+    expect(desc).toContain('Team agreed Postgres over MySQL');
+  });
+
+  it('search results embed shows body beneath title', () => {
+    const embed = formatSearchResultsEmbed(
+      [{ id: 1, type: 'action', title: 'Fix login bug', body: 'Users report 500 errors on the login page', status: 'open' }],
+      'login',
+    );
+    const desc = embed.toJSON().description!;
+    expect(desc).toContain('Fix login bug');
+    expect(desc).toContain('Users report 500 errors');
+  });
+
+  it('truncates long body text with ellipsis', () => {
+    const longBody = 'A'.repeat(200);
+    const embed = formatActionsEmbed({
+      actions: [{ title: 'Long body', body: longBody, metadata: {} }],
+      count: 1,
+    });
+    const desc = embed.toJSON().description!;
+    expect(desc).toContain('...');
+    expect(desc).not.toContain(longBody); // should be truncated
+  });
+});
+
 // ─── Router Tests ─────────────────────────────────────────────────
 
 describe('KNOWN_COMMAND_NAMES', () => {

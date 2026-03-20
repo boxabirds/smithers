@@ -6,6 +6,7 @@ import {
   EMPTY_MESSAGES,
   ENTITY_TYPE_DESCRIPTIONS,
   COMMAND_DESCRIPTIONS,
+  MAX_BODY_DISPLAY_LENGTH,
 } from './constants.js';
 
 function truncate(text: string, maxLength: number): string {
@@ -16,6 +17,11 @@ function truncate(text: string, maxLength: number): string {
 function formatDate(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date;
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function bodyLine(body: string | null | undefined): string {
+  if (!body) return '';
+  return `\n  ${truncate(body, MAX_BODY_DISPLAY_LENGTH)}`;
 }
 
 export interface EntityResult {
@@ -41,7 +47,7 @@ export function formatActionsEmbed(result: { actions: EntityResult[]; count: num
   const lines = result.actions.map((a) => {
     const assignee = a.metadata?.assignee ? ` (assigned: ${a.metadata.assignee})` : '';
     const date = a.last_seen ? ` — ${formatDate(a.last_seen)}` : '';
-    return `• ${truncate(a.title, EMBED_FIELD_MAX_LENGTH)}${assignee}${date}`;
+    return `• ${truncate(a.title, EMBED_FIELD_MAX_LENGTH)}${assignee}${date}${bodyLine(a.body)}`;
   });
 
   const description = truncate(lines.join('\n'), EMBED_DESCRIPTION_MAX_LENGTH);
@@ -59,7 +65,7 @@ export function formatQuestionsEmbed(result: { questions: EntityResult[]; count:
 
   const lines = result.questions.map((q) => {
     const date = q.first_seen ? ` — ${formatDate(q.first_seen)}` : '';
-    return `• ${truncate(q.title, EMBED_FIELD_MAX_LENGTH)}${date}`;
+    return `• ${truncate(q.title, EMBED_FIELD_MAX_LENGTH)}${date}${bodyLine(q.body)}`;
   });
 
   const description = truncate(lines.join('\n'), EMBED_DESCRIPTION_MAX_LENGTH);
@@ -105,7 +111,7 @@ export function formatProjectsEmbed(result: { projects: EntityResult[]; count: n
 
   const lines = result.projects.map((p) => {
     const mentions = p.mentions ? ` (${p.mentions} mentions)` : '';
-    return `• ${truncate(p.title, EMBED_FIELD_MAX_LENGTH)}${mentions}`;
+    return `• ${truncate(p.title, EMBED_FIELD_MAX_LENGTH)}${mentions}${bodyLine(p.body)}`;
   });
 
   const description = truncate(lines.join('\n'), EMBED_DESCRIPTION_MAX_LENGTH);
@@ -122,9 +128,8 @@ export function formatDecisionsEmbed(result: { decisions: EntityResult[]; count:
   }
 
   const lines = result.decisions.map((d) => {
-    const body = d.body ? `: ${truncate(d.body, EMBED_FIELD_MAX_LENGTH / 2)}` : '';
     const date = d.last_seen ? ` — ${formatDate(d.last_seen)}` : '';
-    return `• ${truncate(d.title, EMBED_FIELD_MAX_LENGTH)}${body}${date}`;
+    return `• ${truncate(d.title, EMBED_FIELD_MAX_LENGTH)}${date}${bodyLine(d.body)}`;
   });
 
   const description = truncate(lines.join('\n'), EMBED_DESCRIPTION_MAX_LENGTH);
@@ -176,6 +181,7 @@ export interface SearchResultEntity {
   id: number;
   type: string;
   title: string;
+  body?: string | null;
   status: string;
 }
 
@@ -192,7 +198,7 @@ export function formatSearchResultsEmbed(
   }
 
   const lines = results.map((r) =>
-    `• **#${r.id}** [${r.type}] ${truncate(r.title, EMBED_FIELD_MAX_LENGTH)} _(${r.status})_`,
+    `• **#${r.id}** [${r.type}] ${truncate(r.title, EMBED_FIELD_MAX_LENGTH)} _(${r.status})_${bodyLine(r.body)}`,
   );
 
   const description = truncate(lines.join('\n'), EMBED_DESCRIPTION_MAX_LENGTH);
