@@ -120,13 +120,20 @@ export function buildCommandDefinitions(): SlashCommandBuilder[] {
   return [actions, questions, digest, projects, decisions, status, search, correct, about, help];
 }
 
-export async function registerCommands(clientId: string, token: string): Promise<void> {
+export async function registerCommands(clientId: string, token: string, guildIds?: string[]): Promise<void> {
   const commands = buildCommandDefinitions();
   const rest = new REST({ version: '10' }).setToken(token);
+  const body = commands.map((c) => c.toJSON());
 
-  await rest.put(Routes.applicationCommands(clientId), {
-    body: commands.map((c) => c.toJSON()),
-  });
+  if (guildIds && guildIds.length > 0) {
+    // Guild-specific registration — instant propagation
+    for (const guildId of guildIds) {
+      await rest.put(Routes.applicationGuildCommands(clientId, guildId), { body });
+    }
+  } else {
+    // Global registration — can take up to 1 hour to propagate
+    await rest.put(Routes.applicationCommands(clientId), { body });
+  }
 
   console.log(JSON.stringify({
     timestamp: new Date().toISOString(),

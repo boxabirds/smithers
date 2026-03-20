@@ -31,7 +31,8 @@ export async function startBot(config: Config, pool: pg.Pool): Promise<Client> {
 
     // Register slash commands
     try {
-      await registerCommands(readyClient.user.id, config.discord.token);
+      const guildIds = [...readyClient.guilds.cache.keys()];
+      await registerCommands(readyClient.user.id, config.discord.token, guildIds);
     } catch (err) {
       console.error(JSON.stringify({
         timestamp: new Date().toISOString(),
