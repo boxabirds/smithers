@@ -584,15 +584,14 @@ describe('entity body display in formatters', () => {
     expect(desc).toContain('Users report 500 errors');
   });
 
-  it('truncates long body text with ellipsis', () => {
+  it('shows full body text without truncation', () => {
     const longBody = 'A'.repeat(200);
     const embed = formatActionsEmbed({
       actions: [{ title: 'Long body', body: longBody, metadata: {} }],
       count: 1,
     });
     const desc = embed.toJSON().description!;
-    expect(desc).toContain('...');
-    expect(desc).not.toContain(longBody); // should be truncated
+    expect(desc).toContain(longBody);
   });
 });
 

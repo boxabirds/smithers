@@ -21,7 +21,7 @@ function formatDateTime(date: Date | string): string {
 
 function bodyLine(body: string | null | undefined): string {
   if (!body) return '';
-  return `\n${truncate(body, MAX_BODY_DISPLAY_LENGTH)}`;
+  return `\n${body}`;
 }
 
 export interface EntityResult {
