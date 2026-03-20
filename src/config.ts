@@ -9,6 +9,7 @@ export interface Config {
   };
   gemini: {
     apiKey: string;
+    modelId: string;
   };
   extraction: {
     intervalMins: number;
@@ -32,6 +33,7 @@ const DEFAULT_POOL_MAX = 10;
 const DEFAULT_EXTRACTION_INTERVAL_MINS = 60;
 const DEFAULT_MCP_PORT = 3100;
 const DEFAULT_LOG_LEVEL = 'info';
+const DEFAULT_GEMINI_MODEL_ID = 'gemini-3-flash-latest';
 
 function requireEnv(
   env: Record<string, string | undefined>,
@@ -88,7 +90,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   const config: Config = {
     discord: { token: discordToken! },
     database: { url: databaseUrl!, poolMin, poolMax },
-    gemini: { apiKey: geminiApiKey! },
+    gemini: { apiKey: geminiApiKey!, modelId: env['GEMINI_MODEL_ID']?.trim() || DEFAULT_GEMINI_MODEL_ID },
     extraction: { intervalMins },
     mcp: { port: mcpPort, authToken: mcpAuthToken! },
     logLevel,

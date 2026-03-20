@@ -122,4 +122,135 @@ describe('Entity Merger', () => {
     expect(result.created).toBe(1); // merged locally, only 1 created
     expect(result.updated).toBe(0);
   });
+
+  // ─── resolves_existing_id Tests ─────────────────────────────────
+
+  it('updates entity directly by resolves_existing_id', async () => {
+    const existingId = await insertEntity(pool, {
+      guild_id: '200', type: 'action', title: 'Set up Redis',
+      body: 'Configure Redis', status: 'open', confidence: 0.9,
+      first_seen: new Date(), last_seen: new Date(), mentions: 1,
+      metadata: { assignee: 'bob' },
+    });
+
+    const runResult = await pool.query(
+      `INSERT INTO extraction_runs (guild_id, window_start, window_end, message_count, model)
+       VALUES ('200', now(), now(), 1, 'test') RETURNING id`,
+    );
+
+    const result = await mergeEntities(pool, '200', [
+      makeExtracted({
+        resolvesExistingId: existingId,
+        status: 'resolved',
+        confidence: 0.9,
+        body: 'Redis config completed',
+      }),
+    ], runResult.rows[0].id);
+
+    expect(result.updated).toBe(1);
+    expect(result.created).toBe(0);
+
+    const entity = await getEntityById(pool, existingId);
+    expect(entity!.status).toBe('resolved');
+    expect(entity!.mentions).toBe(2);
+  });
+
+  it('skips update when resolves_existing_id does not exist', async () => {
+    const runResult = await pool.query(
+      `INSERT INTO extraction_runs (guild_id, window_start, window_end, message_count, model)
+       VALUES ('200', now(), now(), 1, 'test') RETURNING id`,
+    );
+
+    const result = await mergeEntities(pool, '200', [
+      makeExtracted({ resolvesExistingId: 999999, status: 'resolved', confidence: 0.9 }),
+    ], runResult.rows[0].id);
+
+    expect(result.skipped).toBe(1);
+    expect(result.updated).toBe(0);
+  });
+
+  it('skips update when resolves_existing_id references deleted entity', async () => {
+    const existingId = await insertEntity(pool, {
+      guild_id: '200', type: 'action', title: 'Old action',
+      body: null, status: 'open', confidence: 0.9,
+      first_seen: new Date(), last_seen: new Date(), mentions: 1,
+      metadata: {},
+    });
+    await pool.query('UPDATE entities SET deleted_at = now() WHERE id = $1', [existingId]);
+
+    const runResult = await pool.query(
+      `INSERT INTO extraction_runs (guild_id, window_start, window_end, message_count, model)
+       VALUES ('200', now(), now(), 1, 'test') RETURNING id`,
+    );
+
+    const result = await mergeEntities(pool, '200', [
+      makeExtracted({ resolvesExistingId: existingId, status: 'resolved', confidence: 0.9 }),
+    ], runResult.rows[0].id);
+
+    expect(result.skipped).toBe(1);
+  });
+
+  it('skips update when resolves_existing_id references entity from different guild', async () => {
+    const existingId = await insertEntity(pool, {
+      guild_id: '999', type: 'action', title: 'Other guild action',
+      body: null, status: 'open', confidence: 0.9,
+      first_seen: new Date(), last_seen: new Date(), mentions: 1,
+      metadata: {},
+    });
+
+    const runResult = await pool.query(
+      `INSERT INTO extraction_runs (guild_id, window_start, window_end, message_count, model)
+       VALUES ('200', now(), now(), 1, 'test') RETURNING id`,
+    );
+
+    const result = await mergeEntities(pool, '200', [
+      makeExtracted({ resolvesExistingId: existingId, status: 'resolved', confidence: 0.9 }),
+    ], runResult.rows[0].id);
+
+    expect(result.skipped).toBe(1);
+  });
+
+  it('does not update status when confidence <= 0.5', async () => {
+    const existingId = await insertEntity(pool, {
+      guild_id: '200', type: 'action', title: 'Ambiguous action',
+      body: null, status: 'open', confidence: 0.9,
+      first_seen: new Date(), last_seen: new Date(), mentions: 1,
+      metadata: {},
+    });
+
+    const runResult = await pool.query(
+      `INSERT INTO extraction_runs (guild_id, window_start, window_end, message_count, model)
+       VALUES ('200', now(), now(), 1, 'test') RETURNING id`,
+    );
+
+    await mergeEntities(pool, '200', [
+      makeExtracted({ resolvesExistingId: existingId, status: 'resolved', confidence: 0.4 }),
+    ], runResult.rows[0].id);
+
+    const entity = await getEntityById(pool, existingId);
+    expect(entity!.status).toBe('open'); // unchanged due to low confidence
+  });
+
+  it('deduplicates update records by resolves_existing_id within batch', async () => {
+    const existingId = await insertEntity(pool, {
+      guild_id: '200', type: 'action', title: 'Dedup target',
+      body: null, status: 'open', confidence: 0.9,
+      first_seen: new Date(), last_seen: new Date(), mentions: 1,
+      metadata: {},
+    });
+
+    const runResult = await pool.query(
+      `INSERT INTO extraction_runs (guild_id, window_start, window_end, message_count, model)
+       VALUES ('200', now(), now(), 1, 'test') RETURNING id`,
+    );
+
+    const result = await mergeEntities(pool, '200', [
+      makeExtracted({ resolvesExistingId: existingId, status: 'resolved', confidence: 0.6, evidenceMessageIds: ['a'] }),
+      makeExtracted({ resolvesExistingId: existingId, status: 'resolved', confidence: 0.9, evidenceMessageIds: ['b'] }),
+    ], runResult.rows[0].id);
+
+    // Should be deduplicated to 1 update, not 2
+    expect(result.updated).toBe(1);
+    expect(result.created).toBe(0);
+  });
 });

@@ -3,6 +3,7 @@ import type pg from 'pg';
 import type { GuildConfig } from '../db/guild-config.js';
 import { insertMessage, updateMessageContent, softDeleteMessage } from '../db/messages.js';
 import { redactContent } from '../redaction.js';
+import { notifyMessageReceived } from '../extraction/scheduler.js';
 
 export function shouldProcessMessage(
   message: { author: { bot: boolean }; guildId: string | null; channelId: string },
@@ -39,6 +40,7 @@ export async function handleMessageCreate(
       reply_to_id: message.reference?.messageId ?? null,
       thread_id: message.thread?.id ?? null,
     });
+    notifyMessageReceived(message.guildId!);
   } catch (err) {
     // Log warning but do not crash the bot
     console.warn(JSON.stringify({

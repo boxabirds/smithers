@@ -1,15 +1,17 @@
 import type pg from 'pg';
 import type { Config } from '../config.js';
 import type { MessageRow } from '../db/messages.js';
-import { markStaleEntities } from '../db/entities.js';
-import { chunkMessages } from './chunker.js';
+import { markStaleEntities, getAllEntityContext } from '../db/entities.js';
 import { extractEntities } from './extractor.js';
 import { mergeEntities } from './merger.js';
 
-// Gemini Flash pricing
-const INPUT_PRICE_PER_TOKEN = 0.10 / 1_000_000;
-const OUTPUT_PRICE_PER_TOKEN = 0.40 / 1_000_000;
+// Gemini Flash pricing (approximate — will be replaced by OpenRouter lookup in story 11)
+const INPUT_PRICE_PER_TOKEN = 0.30 / 1_000_000;
+const OUTPUT_PRICE_PER_TOKEN = 2.50 / 1_000_000;
+
 const STALENESS_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const QUIET_PERIOD_MS = 5 * 60 * 1000; // 5 minutes of silence before extraction
+const CHECK_INTERVAL_MS = 60 * 1000; // check every 60 seconds
 
 export interface ExtractionRunResult {
   guildId: string;
@@ -85,7 +87,6 @@ export async function runExtractionCycle(
   if (lastEnd) {
     windowStart = lastEnd;
   } else {
-    // First run: start from earliest message
     const earliest = await pool.query(
       `SELECT MIN(created_at) AS min_time FROM messages WHERE guild_id = $1`,
       [guildId],
@@ -97,53 +98,91 @@ export async function runExtractionCycle(
   const messages = await getMessagesInWindow(pool, guildId, windowStart, now);
   if (messages.length === 0) return null;
 
-  const chunks = chunkMessages(messages);
-  let totalTokensIn = 0;
-  let totalTokensOut = 0;
-  let totalCreated = 0;
-  let totalUpdated = 0;
+  // Fetch full entity context for the guild
+  const entityContext = await getAllEntityContext(pool, guildId);
 
   // Log the run first to get an extraction ID
-  const costEstimate = 0; // will update after
   const runId = await logExtractionRun(pool, {
     guildId,
     channelId: null,
     windowStart,
     windowEnd: now,
     messageCount: messages.length,
-    model: 'gemini-2.5-flash',
+    model: config.gemini.modelId,
     tokensIn: 0,
     tokensOut: 0,
-    costUsd: costEstimate,
+    costUsd: 0,
   });
 
-  for (const chunk of chunks) {
-    const result = await extractEntities(chunk, config);
-    totalTokensIn += result.tokensIn;
-    totalTokensOut += result.tokensOut;
+  // Single extraction call with full entity context
+  const result = await extractEntities(messages, config, entityContext);
+  const mergeResult = await mergeEntities(pool, guildId, result.entities, runId);
 
-    const mergeResult = await mergeEntities(pool, guildId, result.entities, runId);
-    totalCreated += mergeResult.created;
-    totalUpdated += mergeResult.updated;
-  }
-
-  const totalCost = calculateCost(totalTokensIn, totalTokensOut);
+  const totalCost = calculateCost(result.tokensIn, result.tokensOut);
 
   // Update the run with actual token counts and cost
   await pool.query(
     `UPDATE extraction_runs SET tokens_in = $1, tokens_out = $2, cost_usd = $3 WHERE id = $4`,
-    [totalTokensIn, totalTokensOut, totalCost, runId],
+    [result.tokensIn, result.tokensOut, totalCost, runId],
   );
 
   return {
     guildId,
     messageCount: messages.length,
-    entitiesCreated: totalCreated,
-    entitiesUpdated: totalUpdated,
-    tokensIn: totalTokensIn,
-    tokensOut: totalTokensOut,
+    entitiesCreated: mergeResult.created,
+    entitiesUpdated: mergeResult.updated,
+    tokensIn: result.tokensIn,
+    tokensOut: result.tokensOut,
     costUsd: totalCost,
   };
+}
+
+// ─── Extraction Semaphore ────────────────────────────────────────
+
+interface LockEntry {
+  promise: Promise<void>;
+  resolve: () => void;
+}
+
+const extractionLocks = new Map<string, LockEntry>();
+
+function acquireExtractionLock(guildId: string): void {
+  let resolve: () => void;
+  const promise = new Promise<void>((r) => { resolve = r; });
+  extractionLocks.set(guildId, { promise, resolve: resolve! });
+}
+
+function releaseExtractionLock(guildId: string): void {
+  const lock = extractionLocks.get(guildId);
+  if (lock) {
+    lock.resolve();
+    extractionLocks.delete(guildId);
+  }
+}
+
+/**
+ * Awaits any in-progress extraction for the given guild.
+ * Returns immediately if no extraction is running.
+ * Used by slash command handlers to ensure fresh data.
+ */
+export async function awaitExtractionLock(guildId: string): Promise<void> {
+  const lock = extractionLocks.get(guildId);
+  if (lock) {
+    await lock.promise;
+  }
+}
+
+// ─── Event-Driven Scheduling ─────────────────────────────────────
+
+const lastMessageTime = new Map<string, number>();
+const lastExtractionTime = new Map<string, number>();
+
+/**
+ * Called from events.ts on each incoming message.
+ * Updates the last message timestamp for the guild.
+ */
+export function notifyMessageReceived(guildId: string): void {
+  lastMessageTime.set(guildId, Date.now());
 }
 
 export interface SchedulerHandle {
@@ -151,17 +190,39 @@ export interface SchedulerHandle {
 }
 
 export function startScheduler(config: Config, pool: pg.Pool): SchedulerHandle {
-  const intervalMs = config.extraction.intervalMins * 60 * 1000;
+  const maxCeilingMs = config.extraction.intervalMins * 60 * 1000;
   let running = true;
 
-  const runCycle = async () => {
+  const checkAndTrigger = async () => {
     if (!running) return;
 
     const guilds = await pool.query('SELECT guild_id FROM guild_config');
+    const now = Date.now();
+
     for (const row of guilds.rows) {
       if (!running) break;
+      const guildId = String(row.guild_id);
+
+      // Skip if extraction is already running for this guild
+      if (extractionLocks.has(guildId)) continue;
+
+      const lastMsg = lastMessageTime.get(guildId) ?? 0;
+      const lastExtract = lastExtractionTime.get(guildId) ?? 0;
+
+      // No new messages since last extraction
+      if (lastMsg <= lastExtract) continue;
+
+      const quietElapsed = now - lastMsg >= QUIET_PERIOD_MS;
+      const ceilingReached = lastExtract > 0 && (now - lastExtract >= maxCeilingMs);
+      const firstRun = lastExtract === 0;
+
+      if (!quietElapsed && !ceilingReached && !firstRun) continue;
+
+      // Trigger extraction
+      acquireExtractionLock(guildId);
       try {
-        const result = await runExtractionCycle(pool, String(row.guild_id), config);
+        const result = await runExtractionCycle(pool, guildId, config);
+        lastExtractionTime.set(guildId, Date.now());
         if (result) {
           console.log(JSON.stringify({
             timestamp: new Date().toISOString(),
@@ -175,14 +236,15 @@ export function startScheduler(config: Config, pool: pg.Pool): SchedulerHandle {
           timestamp: new Date().toISOString(),
           level: 'error',
           service: 'extraction',
-          message: `Extraction failed for guild ${row.guild_id}: ${err instanceof Error ? err.message : err}`,
+          message: `Extraction failed for guild ${guildId}: ${err instanceof Error ? err.message : err}`,
         }));
-        // Don't advance window — next cycle will retry
+      } finally {
+        releaseExtractionLock(guildId);
       }
     }
   };
 
-  const extractionTimer = setInterval(runCycle, intervalMs);
+  const checkTimer = setInterval(checkAndTrigger, CHECK_INTERVAL_MS);
 
   // Staleness check runs daily
   const stalenessTimer = setInterval(async () => {
@@ -207,13 +269,13 @@ export function startScheduler(config: Config, pool: pg.Pool): SchedulerHandle {
     }
   }, STALENESS_CHECK_INTERVAL_MS);
 
-  // Run first cycle immediately
-  runCycle();
+  // Run first check immediately
+  checkAndTrigger();
 
   return {
     stop: () => {
       running = false;
-      clearInterval(extractionTimer);
+      clearInterval(checkTimer);
       clearInterval(stalenessTimer);
     },
   };

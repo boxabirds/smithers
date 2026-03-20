@@ -5,6 +5,7 @@ import {
   insertEntity,
   updateEntity,
   linkEvidence,
+  getEntityById,
   type EntityRow,
 } from '../db/entities.js';
 
@@ -20,14 +21,36 @@ function deduplicateWithinBatch(entities: ExtractedEntity[]): ExtractedEntity[] 
   const deduplicated: ExtractedEntity[] = [];
 
   for (const entity of entities) {
+    // Dedup by resolves_existing_id first
+    if (entity.resolvesExistingId !== undefined) {
+      const existingUpdate = deduplicated.find(
+        (e) => e.resolvesExistingId === entity.resolvesExistingId,
+      );
+      if (existingUpdate) {
+        // Keep higher confidence, merge evidence
+        existingUpdate.evidenceMessageIds = [...new Set([...existingUpdate.evidenceMessageIds, ...entity.evidenceMessageIds])];
+        if (entity.confidence > existingUpdate.confidence) {
+          existingUpdate.confidence = entity.confidence;
+          existingUpdate.status = entity.status;
+        }
+        if (entity.body && (!existingUpdate.body || entity.body.length > existingUpdate.body.length)) {
+          existingUpdate.body = entity.body;
+        }
+        continue;
+      }
+      deduplicated.push({ ...entity });
+      continue;
+    }
+
+    // Dedup new entities by type + title
     const existing = deduplicated.find(
       (e) =>
+        e.resolvesExistingId === undefined &&
         e.type === entity.type &&
         e.title.toLowerCase() === entity.title.toLowerCase(),
     );
 
     if (existing) {
-      // Merge into existing
       existing.people = [...new Set([...existing.people, ...entity.people])];
       existing.evidenceMessageIds = [...new Set([...existing.evidenceMessageIds, ...entity.evidenceMessageIds])];
       if (entity.body && (!existing.body || entity.body.length > existing.body.length)) {
@@ -84,9 +107,70 @@ export async function mergeEntities(
   let skipped = 0;
 
   for (const entity of deduplicated) {
-    const matches = await searchSimilarEntities(pool, guildId, entity.type, entity.title, threshold);
-
     const now = new Date();
+
+    // Direct update path: entity references an existing entity by ID
+    if (entity.resolvesExistingId !== undefined) {
+      const existing = await getEntityById(pool, entity.resolvesExistingId, true);
+
+      if (!existing) {
+        console.warn(JSON.stringify({
+          timestamp: now.toISOString(),
+          level: 'warn',
+          service: 'extraction',
+          message: `resolves_existing_id ${entity.resolvesExistingId} not found, skipping update`,
+        }));
+        skipped++;
+        continue;
+      }
+
+      if (existing.deleted_at) {
+        console.warn(JSON.stringify({
+          timestamp: now.toISOString(),
+          level: 'warn',
+          service: 'extraction',
+          message: `resolves_existing_id ${entity.resolvesExistingId} is deleted, skipping update`,
+        }));
+        skipped++;
+        continue;
+      }
+
+      if (existing.guild_id !== guildId) {
+        console.warn(JSON.stringify({
+          timestamp: now.toISOString(),
+          level: 'warn',
+          service: 'extraction',
+          message: `resolves_existing_id ${entity.resolvesExistingId} belongs to different guild, skipping update`,
+        }));
+        skipped++;
+        continue;
+      }
+
+      await updateEntity(pool, entity.resolvesExistingId, {
+        last_seen: now,
+        mentions: (existing.mentions ?? 1) + 1,
+        ...(entity.status !== existing.status && entity.confidence > 0.5
+          ? { status: entity.status }
+          : {}),
+        ...(entity.body && (!existing.body || entity.body.length > (existing.body?.length ?? 0))
+          ? { body: entity.body }
+          : {}),
+      });
+
+      for (const msgId of entity.evidenceMessageIds) {
+        try {
+          await linkEvidence(pool, entity.resolvesExistingId, msgId, extractionId);
+        } catch {
+          // Message ID might not exist — skip
+        }
+      }
+
+      updated++;
+      continue;
+    }
+
+    // Similarity-based path: search for existing entities by title
+    const matches = await searchSimilarEntities(pool, guildId, entity.type, entity.title, threshold);
 
     if (matches.length > 0) {
       const bestMatch = matches[0];

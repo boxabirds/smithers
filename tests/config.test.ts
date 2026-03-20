@@ -98,4 +98,14 @@ describe('loadConfig', () => {
     const config = loadConfig({ ...validEnv, UNKNOWN_VAR: 'whatever' });
     expect(config.discord.token).toBe('test-token');
   });
+
+  it('defaults GEMINI_MODEL_ID to gemini-3-flash-latest', () => {
+    const config = loadConfig(validEnv);
+    expect(config.gemini.modelId).toBe('gemini-3-flash-latest');
+  });
+
+  it('reads GEMINI_MODEL_ID from env when set', () => {
+    const config = loadConfig({ ...validEnv, GEMINI_MODEL_ID: 'gemini-4-flash' });
+    expect(config.gemini.modelId).toBe('gemini-4-flash');
+  });
 });

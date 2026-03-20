@@ -13,6 +13,7 @@ import {
   handleHelpCommand,
 } from './handlers.js';
 import { formatErrorEmbed } from './formatters.js';
+import { awaitExtractionLock } from '../../extraction/scheduler.js';
 
 type CommandHandler = (
   interaction: ChatInputCommandInteraction,
@@ -51,6 +52,9 @@ export async function handleSlashCommand(
 
   try {
     await interaction.deferReply();
+    if (interaction.guildId) {
+      await awaitExtractionLock(interaction.guildId);
+    }
     await handler(interaction, pool, botStartTime);
   } catch (err) {
     console.error(JSON.stringify({

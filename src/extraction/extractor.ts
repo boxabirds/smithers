@@ -1,9 +1,13 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI, type Part } from '@google/generative-ai';
+import { GoogleAIFileManager } from '@google/generative-ai/server';
+import { writeFileSync, unlinkSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import type { Config } from '../config.js';
 import type { MessageRow } from '../db/messages.js';
+import type { EntityContextItem } from '../db/entities.js';
 import { buildExtractionPrompt } from './prompts.js';
 
-const MODEL_NAME = 'gemini-2.5-flash';
 const MAX_RETRIES = 2;
 const MIN_CONFIDENCE = 0.3;
 
@@ -21,6 +25,7 @@ export interface ExtractedEntity {
     url?: string;
   };
   evidenceMessageIds: string[];
+  resolvesExistingId?: number;
 }
 
 export interface ExtractionResult {
@@ -33,6 +38,26 @@ const VALID_TYPES = new Set(['project', 'action', 'question', 'decision', 'conce
 const VALID_STATUSES = new Set(['open', 'resolved', 'closed']);
 
 function validateEntity(raw: Record<string, unknown>): ExtractedEntity | null {
+  // Update record path: resolves an existing entity by ID
+  if (typeof raw.resolves_existing_id === 'number') {
+    if (!VALID_STATUSES.has(raw.status as string)) return null;
+
+    return {
+      type: 'action', // placeholder — merger uses the ID, not the type
+      title: '',       // placeholder — merger uses the ID, not the title
+      body: typeof raw.body === 'string' ? raw.body : null,
+      status: raw.status as ExtractedEntity['status'],
+      confidence: typeof raw.confidence === 'number' ? raw.confidence : 1.0,
+      people: [],
+      metadata: {},
+      evidenceMessageIds: Array.isArray(raw.evidence_message_ids)
+        ? raw.evidence_message_ids.filter((id: unknown) => typeof id === 'string')
+        : [],
+      resolvesExistingId: raw.resolves_existing_id,
+    };
+  }
+
+  // New entity path
   if (!raw.type || !VALID_TYPES.has(raw.type as string)) return null;
   if (!raw.title || typeof raw.title !== 'string') return null;
 
@@ -59,24 +84,78 @@ function validateEntity(raw: Record<string, unknown>): ExtractedEntity | null {
   };
 }
 
+async function uploadJsonFile(
+  fileManager: GoogleAIFileManager,
+  data: unknown,
+  displayName: string,
+): Promise<{ mimeType: string; fileUri: string }> {
+  const tmpPath = join(tmpdir(), `smithers-${displayName}-${Date.now()}.json`);
+  try {
+    writeFileSync(tmpPath, JSON.stringify(data));
+    const uploadResult = await fileManager.uploadFile(tmpPath, {
+      mimeType: 'application/json',
+      displayName,
+    });
+    return {
+      mimeType: uploadResult.file.mimeType,
+      fileUri: uploadResult.file.uri,
+    };
+  } finally {
+    try { unlinkSync(tmpPath); } catch { /* cleanup best-effort */ }
+  }
+}
+
+function formatMessagesForUpload(messages: MessageRow[]): Record<string, unknown>[] {
+  return messages.map((m) => ({
+    id: m.id,
+    author_name: m.author_name,
+    content: m.content,
+    created_at: m.created_at.toISOString(),
+    channel_id: m.channel_id,
+    reply_to_id: m.reply_to_id,
+    thread_id: m.thread_id,
+  }));
+}
+
 export async function extractEntities(
   messages: MessageRow[],
   config: Config,
+  entityContext?: EntityContextItem[],
 ): Promise<ExtractionResult> {
   const genAI = new GoogleGenerativeAI(config.gemini.apiKey);
   const model = genAI.getGenerativeModel({
-    model: MODEL_NAME,
+    model: config.gemini.modelId,
     generationConfig: {
       responseMimeType: 'application/json',
     },
   });
 
-  const prompt = buildExtractionPrompt(messages);
+  const prompt = buildExtractionPrompt(messages, entityContext);
   let lastError: Error | null = null;
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const result = await model.generateContent(prompt);
+      let parts: Part[];
+
+      if (entityContext && entityContext.length > 0) {
+        // File-based extraction: upload entities + messages as JSON files
+        const fileManager = new GoogleAIFileManager(config.gemini.apiKey);
+        const [entitiesFile, messagesFile] = await Promise.all([
+          uploadJsonFile(fileManager, entityContext, 'entities'),
+          uploadJsonFile(fileManager, formatMessagesForUpload(messages), 'messages'),
+        ]);
+
+        parts = [
+          { fileData: entitiesFile },
+          { fileData: messagesFile },
+          { text: prompt },
+        ];
+      } else {
+        // Inline extraction: prompt includes messages directly
+        parts = [{ text: prompt }];
+      }
+
+      const result = await model.generateContent(parts);
       const response = result.response;
       const text = response.text();
 
@@ -102,3 +181,6 @@ export async function extractEntities(
 
   throw lastError ?? new Error('Extraction failed after retries');
 }
+
+// Re-export for testing
+export { validateEntity as _validateEntity };

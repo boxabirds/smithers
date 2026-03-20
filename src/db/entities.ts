@@ -16,6 +16,16 @@ export interface EntityRow {
   metadata: Record<string, unknown>;
 }
 
+export interface EntityContextItem {
+  id: number;
+  type: string;
+  title: string;
+  body: string | null;
+  status: string;
+  assignee: string | null;
+  tags: string[];
+}
+
 export interface EntityMatch {
   id: number;
   title: string;
@@ -224,6 +234,45 @@ export async function getEntitiesByFilters(
   );
 
   return result.rows as EntityRow[];
+}
+
+// ─── Entity Context for Extraction ───────────────────────────────
+
+export async function getAllEntityContext(
+  pool: pg.Pool,
+  guildId: string,
+): Promise<EntityContextItem[]> {
+  const result = await pool.query(
+    `SELECT id, type, title, body, status,
+            metadata->>'assignee' AS assignee,
+            COALESCE(
+              (SELECT json_agg(t)::text FROM json_array_elements_text(metadata->'tags') AS t), '[]'
+            ) AS tags_json
+     FROM entities
+     WHERE guild_id = $1 AND deleted_at IS NULL
+     ORDER BY
+       CASE type
+         WHEN 'action' THEN 1
+         WHEN 'question' THEN 2
+         WHEN 'project' THEN 3
+         WHEN 'decision' THEN 4
+         WHEN 'concept' THEN 5
+         WHEN 'resource' THEN 6
+         ELSE 7
+       END,
+       last_seen DESC`,
+    [guildId],
+  );
+
+  return result.rows.map((r: Record<string, unknown>) => ({
+    id: r.id as number,
+    type: r.type as string,
+    title: r.title as string,
+    body: (r.body as string) ?? null,
+    status: r.status as string,
+    assignee: (r.assignee as string) ?? null,
+    tags: r.tags_json ? JSON.parse(r.tags_json as string) as string[] : [],
+  }));
 }
 
 // ─── Correction Operations ───────────────────────────────────────
