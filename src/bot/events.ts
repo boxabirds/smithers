@@ -2,6 +2,7 @@ import type { Message, PartialMessage } from 'discord.js';
 import type pg from 'pg';
 import type { GuildConfig } from '../db/guild-config.js';
 import { insertMessage, updateMessageContent, softDeleteMessage } from '../db/messages.js';
+import { redactContent } from '../redaction.js';
 
 export function shouldProcessMessage(
   message: { author: { bot: boolean }; guildId: string | null; channelId: string },
@@ -25,13 +26,14 @@ export async function handleMessageCreate(
   if (!shouldProcessMessage(message, guildConfig)) return;
 
   try {
+    const redacted = await redactContent(message.content ?? '');
     await insertMessage(pool, {
       id: message.id,
       channel_id: message.channelId,
       guild_id: message.guildId!,
       author_id: message.author.id,
       author_name: message.author.username,
-      content: message.content ?? '',
+      content: redacted,
       created_at: message.createdAt,
       has_attachments: message.attachments.size > 0,
       reply_to_id: message.reference?.messageId ?? null,
@@ -56,7 +58,8 @@ export async function handleMessageUpdate(
   if (!newMessage.content) return;
 
   try {
-    await updateMessageContent(pool, newMessage.id, newMessage.content);
+    const redacted = await redactContent(newMessage.content);
+    await updateMessageContent(pool, newMessage.id, redacted);
   } catch (err) {
     console.warn(JSON.stringify({
       timestamp: new Date().toISOString(),

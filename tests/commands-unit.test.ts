@@ -11,6 +11,8 @@ import {
   formatSearchResultsEmbed,
   formatCorrectionEmbed,
   formatMergeEmbed,
+  formatAboutEmbed,
+  formatHelpEmbed,
 } from '../src/bot/commands/formatters.js';
 import { buildCommandDefinitions } from '../src/bot/commands/register.js';
 import { KNOWN_COMMAND_NAMES } from '../src/bot/commands/index.js';
@@ -21,10 +23,12 @@ import {
   DEFAULT_LOOKBACK_DAYS,
   VALID_ENTITY_TYPES,
   MAX_SEARCH_RESULTS,
+  ENTITY_TYPE_DESCRIPTIONS,
+  COMMAND_DESCRIPTIONS,
 } from '../src/bot/commands/constants.js';
 
-/** Number of total slash commands (original 6 + search + correct) */
-const TOTAL_COMMAND_COUNT = 8;
+/** Number of total slash commands (original 6 + search + correct + about + help) */
+const TOTAL_COMMAND_COUNT = 10;
 
 /** Number of subcommands under /correct */
 const CORRECT_SUBCOMMAND_COUNT = 5;
@@ -374,7 +378,7 @@ describe('buildCommandDefinitions', () => {
 
   it('has all expected command names', () => {
     const names = commands.map((c) => c.name);
-    expect(names).toEqual(['actions', 'questions', 'digest', 'projects', 'decisions', 'status', 'search', 'correct']);
+    expect(names).toEqual(['actions', 'questions', 'digest', 'projects', 'decisions', 'status', 'search', 'correct', 'about', 'help']);
   });
 
   it('actions command has optional string assignee parameter', () => {
@@ -406,8 +410,8 @@ describe('buildCommandDefinitions', () => {
     expect(daysOpt!.type).toBe(4);
   });
 
-  it('questions, projects, status have no options', () => {
-    for (const name of ['questions', 'projects', 'status']) {
+  it('questions, projects, status, about, help have no options', () => {
+    for (const name of ['questions', 'projects', 'status', 'about', 'help']) {
       const cmd = commands.find((c) => c.name === name)!;
       const json = cmd.toJSON();
       expect(json.options ?? []).toHaveLength(0);
@@ -469,12 +473,58 @@ describe('buildCommandDefinitions', () => {
   });
 });
 
+// ─── About & Help Embed Tests ─────────────────────────────────────
+
+describe('formatAboutEmbed', () => {
+  const embed = formatAboutEmbed();
+  const json = embed.toJSON();
+
+  it('has title and description', () => {
+    expect(json.title).toBe('Smithers');
+    expect(json.description).toBeTruthy();
+  });
+
+  it('lists all 6 entity types as fields', () => {
+    expect(json.fields).toHaveLength(6);
+    for (const type of VALID_ENTITY_TYPES) {
+      const field = json.fields!.find((f) => f.name.toLowerCase() === type);
+      expect(field).toBeDefined();
+      expect(field!.value).toBe(ENTITY_TYPE_DESCRIPTIONS[type]);
+    }
+  });
+
+  it('has a footer explaining extraction', () => {
+    expect(json.footer?.text).toContain('periodically');
+  });
+});
+
+describe('formatHelpEmbed', () => {
+  const embed = formatHelpEmbed();
+  const json = embed.toJSON();
+
+  it('has title', () => {
+    expect(json.title).toBe('Commands');
+  });
+
+  it('lists all 10 commands', () => {
+    for (const cmd of Object.keys(COMMAND_DESCRIPTIONS)) {
+      expect(json.description).toContain(`/${cmd}`);
+    }
+  });
+
+  it('each command has a description', () => {
+    for (const [cmd, desc] of Object.entries(COMMAND_DESCRIPTIONS)) {
+      expect(json.description).toContain(desc);
+    }
+  });
+});
+
 // ─── Router Tests ─────────────────────────────────────────────────
 
 describe('KNOWN_COMMAND_NAMES', () => {
   it(`includes all ${TOTAL_COMMAND_COUNT} command names`, () => {
     expect(KNOWN_COMMAND_NAMES).toEqual(
-      expect.arrayContaining(['actions', 'questions', 'digest', 'projects', 'decisions', 'status', 'search', 'correct']),
+      expect.arrayContaining(['actions', 'questions', 'digest', 'projects', 'decisions', 'status', 'search', 'correct', 'about', 'help']),
     );
     expect(KNOWN_COMMAND_NAMES).toHaveLength(TOTAL_COMMAND_COUNT);
   });

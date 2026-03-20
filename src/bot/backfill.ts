@@ -4,6 +4,7 @@ import type pg from 'pg';
 import type { GuildConfig } from '../db/guild-config.js';
 import { batchInsertMessages } from '../db/messages.js';
 import type { MessageRow } from '../db/messages.js';
+import { redactContent } from '../redaction.js';
 
 const BACKFILL_LIMIT = 1000;
 const FETCH_PAGE_SIZE = 100;
@@ -56,7 +57,7 @@ export async function backfillGuild(
             guild_id: msg.guildId!,
             author_id: msg.author.id,
             author_name: msg.author.username,
-            content: msg.content ?? '',
+            content: await redactContent(msg.content ?? ''),
             created_at: msg.createdAt,
             has_attachments: msg.attachments.size > 0,
             reply_to_id: msg.reference?.messageId ?? null,

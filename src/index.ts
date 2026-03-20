@@ -1,6 +1,8 @@
 import { loadConfig } from './config.js';
 import { createPool, verifyConnection, shutdownPool } from './db/client.js';
 import { runMigrations } from './db/migrate.js';
+import { startBot, stopBot } from './bot/index.js';
+import { startScheduler } from './extraction/scheduler.js';
 
 async function main(): Promise<void> {
   const config = loadConfig();
@@ -22,11 +24,15 @@ async function main(): Promise<void> {
       applied: result.applied,
     }));
 
+    const client = await startBot(config, pool);
+    const scheduler = startScheduler(config, pool);
+
     console.log(JSON.stringify({ timestamp: new Date().toISOString(), level: 'info', service: 'main', message: 'Ready' }));
 
-    // Keep process alive until shutdown signal
     const shutdown = async (signal: string) => {
       console.log(JSON.stringify({ timestamp: new Date().toISOString(), level: 'info', service: 'main', message: `Received ${signal}, shutting down` }));
+      scheduler.stop();
+      await stopBot(client);
       await shutdownPool(pool);
       process.exit(0);
     };

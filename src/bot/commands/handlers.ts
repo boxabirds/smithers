@@ -28,8 +28,11 @@ import {
   formatSearchResultsEmbed,
   formatCorrectionEmbed,
   formatMergeEmbed,
+  formatAboutEmbed,
+  formatHelpEmbed,
   type StatusData,
   type SearchResultEntity,
+  type EntityResult,
 } from './formatters.js';
 import { DEFAULT_LOOKBACK_DAYS, MS_PER_DAY, VALID_ENTITY_TYPES, MAX_SEARCH_RESULTS } from './constants.js';
 
@@ -39,7 +42,7 @@ export async function handleActionsCommand(
 ): Promise<void> {
   const assignee = interaction.options.getString('assignee') ?? undefined;
   const result = await handleGetActions(pool, { assignee });
-  const embed = formatActionsEmbed(result as { actions: Record<string, unknown>[]; count: number });
+  const embed = formatActionsEmbed(result as { actions: EntityResult[]; count: number });
   await interaction.editReply({ embeds: [embed] });
 }
 
@@ -48,7 +51,7 @@ export async function handleQuestionsCommand(
   pool: pg.Pool,
 ): Promise<void> {
   const result = await handleGetOpenQuestions(pool, {});
-  const embed = formatQuestionsEmbed(result as { questions: Record<string, unknown>[]; count: number });
+  const embed = formatQuestionsEmbed(result as { questions: EntityResult[]; count: number });
   await interaction.editReply({ embeds: [embed] });
 }
 
@@ -60,7 +63,7 @@ export async function handleDigestCommand(
   const since = new Date(Date.now() - days * MS_PER_DAY).toISOString();
   const result = await handleGetDigest(pool, { since });
   const embed = formatDigestEmbed(
-    result as { summary: Record<string, number>; entities: Record<string, unknown>[]; period: { since: string; until: string } },
+    result as { summary: Record<string, number>; entities: EntityResult[]; period: { since: string; until: string } },
     days,
   );
   await interaction.editReply({ embeds: [embed] });
@@ -71,7 +74,7 @@ export async function handleProjectsCommand(
   pool: pg.Pool,
 ): Promise<void> {
   const result = await handleGetProjects(pool, { status: 'active' });
-  const embed = formatProjectsEmbed(result as { projects: Record<string, unknown>[]; count: number });
+  const embed = formatProjectsEmbed(result as { projects: EntityResult[]; count: number });
   await interaction.editReply({ embeds: [embed] });
 }
 
@@ -83,7 +86,7 @@ export async function handleDecisionsCommand(
   const since = new Date(Date.now() - days * MS_PER_DAY).toISOString();
   const result = await handleGetDecisions(pool, { since });
   const embed = formatDecisionsEmbed(
-    result as { decisions: Record<string, unknown>[]; count: number },
+    result as { decisions: EntityResult[]; count: number },
     days,
   );
   await interaction.editReply({ embeds: [embed] });
@@ -340,5 +343,19 @@ async function handleCorrectMerge(
     { id: targetId, title: result.target.title, mentions: result.target.mentions },
     userId,
   );
+  await interaction.editReply({ embeds: [embed] });
+}
+
+export async function handleAboutCommand(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const embed = formatAboutEmbed();
+  await interaction.editReply({ embeds: [embed] });
+}
+
+export async function handleHelpCommand(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const embed = formatHelpEmbed();
   await interaction.editReply({ embeds: [embed] });
 }

@@ -109,7 +109,15 @@ export function buildCommandDefinitions(): SlashCommandBuilder[] {
         ),
     ) as SlashCommandBuilder;
 
-  return [actions, questions, digest, projects, decisions, status, search, correct];
+  const about = new SlashCommandBuilder()
+    .setName('about')
+    .setDescription('Learn what Smithers tracks and how it works');
+
+  const help = new SlashCommandBuilder()
+    .setName('help')
+    .setDescription('List all available commands');
+
+  return [actions, questions, digest, projects, decisions, status, search, correct, about, help];
 }
 
 export async function registerCommands(clientId: string, token: string): Promise<void> {

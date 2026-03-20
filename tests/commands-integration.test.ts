@@ -284,11 +284,11 @@ describe('Command Handlers (Integration)', () => {
   });
 
   describe('buildCommandDefinitions (registration)', () => {
-    it('returns 8 command builders with correct names', () => {
+    it('returns 10 command builders with correct names', () => {
       const commands = buildCommandDefinitions();
-      expect(commands).toHaveLength(8);
+      expect(commands).toHaveLength(10);
       const names = commands.map((c: { name: string }) => c.name);
-      expect(names).toEqual(['actions', 'questions', 'digest', 'projects', 'decisions', 'status', 'search', 'correct']);
+      expect(names).toEqual(['actions', 'questions', 'digest', 'projects', 'decisions', 'status', 'search', 'correct', 'about', 'help']);
     });
 
     it('each command has a description', () => {

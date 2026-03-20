@@ -4,6 +4,8 @@ import {
   EMBED_DESCRIPTION_MAX_LENGTH,
   EMBED_FIELD_MAX_LENGTH,
   EMPTY_MESSAGES,
+  ENTITY_TYPE_DESCRIPTIONS,
+  COMMAND_DESCRIPTIONS,
 } from './constants.js';
 
 function truncate(text: string, maxLength: number): string {
@@ -16,7 +18,7 @@ function formatDate(date: Date | string): string {
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-interface EntityResult {
+export interface EntityResult {
   title: string;
   body?: string | null;
   status?: string;
@@ -232,4 +234,32 @@ export function formatMergeEmbed(
       `**Combined mentions:** ${target.mentions}\n` +
       `**Merged by:** <@${userId}>`,
     );
+}
+
+export function formatAboutEmbed(): EmbedBuilder {
+  const embed = new EmbedBuilder()
+    .setTitle('Smithers')
+    .setColor(EMBED_COLOURS.ABOUT)
+    .setDescription(
+      'I monitor conversations in this server and automatically extract key items into a searchable knowledge base.',
+    );
+
+  for (const [type, description] of Object.entries(ENTITY_TYPE_DESCRIPTIONS)) {
+    embed.addFields({ name: type.charAt(0).toUpperCase() + type.slice(1), value: description });
+  }
+
+  embed.setFooter({ text: 'Messages are analysed periodically and key items are extracted automatically.' });
+
+  return embed;
+}
+
+export function formatHelpEmbed(): EmbedBuilder {
+  const lines = Object.entries(COMMAND_DESCRIPTIONS)
+    .map(([cmd, desc]) => `\`/${cmd}\` — ${desc}`)
+    .join('\n');
+
+  return new EmbedBuilder()
+    .setTitle('Commands')
+    .setColor(EMBED_COLOURS.HELP)
+    .setDescription(lines);
 }

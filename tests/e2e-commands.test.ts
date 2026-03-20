@@ -97,12 +97,14 @@ describe('E2E Slash Commands via Mock Interaction Harness', () => {
   }
 
   describe('Command Registration', () => {
-    it('defines 8 commands including search and correct', () => {
+    it('defines 10 commands including search, correct, about and help', () => {
       const commands = buildCommandDefinitions();
-      expect(commands).toHaveLength(8);
+      expect(commands).toHaveLength(10);
       const names = commands.map((c) => c.name);
       expect(names).toContain('search');
       expect(names).toContain('correct');
+      expect(names).toContain('about');
+      expect(names).toContain('help');
     });
 
     it('/correct has 5 subcommands', () => {

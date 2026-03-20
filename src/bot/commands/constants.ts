@@ -29,6 +29,30 @@ export const VALID_ENTITY_TYPES = [
   'resource',
 ] as const;
 
+/** Entity type descriptions for /about command */
+export const ENTITY_TYPE_DESCRIPTIONS: Record<string, string> = {
+  project: 'A named initiative, product, feature, or workstream being discussed',
+  action: 'Something someone committed to doing or was asked to do',
+  question: 'A question that was asked — automatically marked resolved if answered',
+  decision: 'An explicit decision or agreement the group reached',
+  concept: 'A technical concept, architecture pattern, or idea discussed in depth',
+  resource: 'A URL, tool, library, or reference that was shared',
+} as const;
+
+/** Command descriptions for /help command */
+export const COMMAND_DESCRIPTIONS: Record<string, string> = {
+  about: 'Learn what Smithers tracks and how it works',
+  help: 'List all available commands',
+  actions: 'Show open action items, optionally filtered by assignee',
+  questions: 'Show unanswered questions',
+  digest: 'Summary of recent activity across all types',
+  projects: 'Show active projects',
+  decisions: 'Show recent decisions',
+  status: 'Bot health — uptime, messages captured, entities extracted',
+  search: 'Free-text search across all entity types',
+  correct: 'Fix extraction errors (retype, retitle, resolve, delete, merge)',
+} as const;
+
 /** Embed colours by command type */
 export const EMBED_COLOURS = {
   ACTIONS: 0x5865F2,   // Blurple
@@ -40,6 +64,8 @@ export const EMBED_COLOURS = {
   ERROR: 0xED4245,     // Red
   SEARCH: 0x5865F2,    // Blurple
   CORRECT: 0x57F287,   // Green
+  ABOUT: 0x5865F2,     // Blurple
+  HELP: 0x57F287,      // Green
 } as const;
 
 /** Empty-state messages */
