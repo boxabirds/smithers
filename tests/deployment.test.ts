@@ -47,6 +47,17 @@ describe('Deployment Configuration', () => {
     expect(content).toContain('BACKUP_RETENTION_DAYS');
   });
 
+  it('migration 002 adds deleted_at to entities and creates entity_corrections', () => {
+    const content = readFileSync(resolve(ROOT, 'src/db/migrations/002_entity_corrections.sql'), 'utf-8');
+    expect(content).toContain('deleted_at');
+    expect(content).toContain('entity_corrections');
+    expect(content).toContain('entity_id');
+    expect(content).toContain('user_id');
+    expect(content).toContain('operation');
+    expect(content).toContain('before_value');
+    expect(content).toContain('after_value');
+  });
+
   it('.env.example documents all required variables', () => {
     const content = readFileSync(resolve(ROOT, '.env.example'), 'utf-8');
     expect(content).toContain('DISCORD_TOKEN');

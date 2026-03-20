@@ -13,6 +13,7 @@ import {
   handleStatusCommand,
 } from '../src/bot/commands/handlers.js';
 import { handleSlashCommand } from '../src/bot/commands/index.js';
+import { buildCommandDefinitions } from '../src/bot/commands/register.js';
 import { EMPTY_MESSAGES } from '../src/bot/commands/constants.js';
 import type { ChatInputCommandInteraction } from 'discord.js';
 
@@ -279,6 +280,23 @@ describe('Command Handlers (Integration)', () => {
       const embedJson = (arg.embeds as { toJSON: () => Record<string, unknown> }[])[0].toJSON();
       expect(embedJson.fields![1].value).toBe('0');
       expect(embedJson.fields![2].value).toBe('0');
+    });
+  });
+
+  describe('buildCommandDefinitions (registration)', () => {
+    it('returns 8 command builders with correct names', () => {
+      const commands = buildCommandDefinitions();
+      expect(commands).toHaveLength(8);
+      const names = commands.map((c: { name: string }) => c.name);
+      expect(names).toEqual(['actions', 'questions', 'digest', 'projects', 'decisions', 'status', 'search', 'correct']);
+    });
+
+    it('each command has a description', () => {
+      const commands = buildCommandDefinitions();
+      for (const cmd of commands) {
+        const json = cmd.toJSON();
+        expect(json.description).toBeTruthy();
+      }
     });
   });
 
