@@ -54,7 +54,7 @@ describe('formatActionsEmbed', () => {
     });
     const json = embed.toJSON();
     expect(json.description).toContain('Deploy auth');
-    expect(json.description).toContain('(assigned: alice)');
+    expect(json.description).toContain('_(alice)_');
     expect(json.description).toContain('Update docs');
     expect(json.footer?.text).toBe('2 action(s)');
   });
@@ -268,13 +268,13 @@ describe('formatSearchResultsEmbed', () => {
       'auth',
     );
     const json = embed.toJSON();
-    expect(json.description).toContain('#1');
+    expect(json.description).toContain('**Deploy auth**');
     expect(json.description).toContain('[action]');
     expect(json.description).toContain('Deploy auth');
     expect(json.description).toContain('(open)');
-    expect(json.description).toContain('#2');
+    expect(json.description).toContain('**Use PostgreSQL**');
     expect(json.description).toContain('[decision]');
-    expect(json.description).toContain('(resolved)');
+    expect(json.description).toContain('_(resolved)_');
     expect(json.footer?.text).toBe('2 result(s)');
   });
 
