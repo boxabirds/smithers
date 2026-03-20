@@ -56,7 +56,7 @@ describe('formatActionsEmbed', () => {
     expect(json.description).toContain('Deploy auth');
     expect(json.description).toContain('_(alice)_');
     expect(json.description).toContain('Update docs');
-    expect(json.footer?.text).toBe('2 action(s)');
+    // No footer — count removed
   });
 
   it('handles action with null body and no assignee', () => {
@@ -97,7 +97,7 @@ describe('formatQuestionsEmbed', () => {
     });
     const json = embed.toJSON();
     expect(json.description).toContain('Which DB?');
-    expect(json.footer?.text).toBe('1 question(s)');
+    // No footer — count removed
   });
 });
 
@@ -184,7 +184,7 @@ describe('formatDecisionsEmbed', () => {
     const json = embed.toJSON();
     expect(json.description).toContain('Use PostgreSQL');
     expect(json.description).toContain('Team agreed');
-    expect(json.footer?.text).toBe('1 decision(s)');
+    // No footer — count removed
   });
 });
 
@@ -275,7 +275,7 @@ describe('formatSearchResultsEmbed', () => {
     expect(json.description).toContain('**Use PostgreSQL**');
     expect(json.description).toContain('[decision]');
     expect(json.description).toContain('_(resolved)_');
-    expect(json.footer?.text).toBe('2 result(s)');
+    // No footer — count removed
   });
 
   it('truncates long titles in results', () => {

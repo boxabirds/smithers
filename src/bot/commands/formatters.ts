@@ -14,14 +14,14 @@ function truncate(text: string, maxLength: number): string {
   return text.slice(0, maxLength - 3) + '...';
 }
 
-function formatDate(date: Date | string): string {
+function formatDateTime(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date;
-  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 function bodyLine(body: string | null | undefined): string {
   if (!body) return '';
-  return `\n> *${truncate(body, MAX_BODY_DISPLAY_LENGTH)}*`;
+  return `\n${truncate(body, MAX_BODY_DISPLAY_LENGTH)}`;
 }
 
 export interface EntityResult {
@@ -46,12 +46,11 @@ export function formatActionsEmbed(result: { actions: EntityResult[]; count: num
 
   const lines = result.actions.map((a, i) => {
     const assignee = a.metadata?.assignee ? ` _(${a.metadata.assignee})_` : '';
-    const date = a.last_seen ? ` — ${formatDate(a.last_seen)}` : '';
+    const date = a.last_seen ? ` started ${formatDateTime(a.last_seen)}` : '';
     return `${i + 1}. **${truncate(a.title, EMBED_FIELD_MAX_LENGTH)}**${assignee}${date}${bodyLine(a.body)}`;
   });
 
-  const description = truncate(lines.join('\n\n'), EMBED_DESCRIPTION_MAX_LENGTH);
-  return embed.setDescription(description).setFooter({ text: `${result.count} action(s)` });
+  return embed.setDescription(truncate(lines.join('\n\n'), EMBED_DESCRIPTION_MAX_LENGTH));
 }
 
 export function formatQuestionsEmbed(result: { questions: EntityResult[]; count: number }): EmbedBuilder {
@@ -64,12 +63,11 @@ export function formatQuestionsEmbed(result: { questions: EntityResult[]; count:
   }
 
   const lines = result.questions.map((q, i) => {
-    const date = q.first_seen ? ` — ${formatDate(q.first_seen)}` : '';
+    const date = q.first_seen ? ` started ${formatDateTime(q.first_seen)}` : '';
     return `${i + 1}. **${truncate(q.title, EMBED_FIELD_MAX_LENGTH)}**${date}${bodyLine(q.body)}`;
   });
 
-  const description = truncate(lines.join('\n\n'), EMBED_DESCRIPTION_MAX_LENGTH);
-  return embed.setDescription(description).setFooter({ text: `${result.count} question(s)` });
+  return embed.setDescription(truncate(lines.join('\n\n'), EMBED_DESCRIPTION_MAX_LENGTH));
 }
 
 export function formatDigestEmbed(
@@ -114,8 +112,7 @@ export function formatProjectsEmbed(result: { projects: EntityResult[]; count: n
     return `${i + 1}. **${truncate(p.title, EMBED_FIELD_MAX_LENGTH)}**${mentions}${bodyLine(p.body)}`;
   });
 
-  const description = truncate(lines.join('\n\n'), EMBED_DESCRIPTION_MAX_LENGTH);
-  return embed.setDescription(description).setFooter({ text: `${result.count} project(s)` });
+  return embed.setDescription(truncate(lines.join('\n\n'), EMBED_DESCRIPTION_MAX_LENGTH));
 }
 
 export function formatDecisionsEmbed(result: { decisions: EntityResult[]; count: number }, days: number): EmbedBuilder {
@@ -128,12 +125,11 @@ export function formatDecisionsEmbed(result: { decisions: EntityResult[]; count:
   }
 
   const lines = result.decisions.map((d, i) => {
-    const date = d.last_seen ? ` — ${formatDate(d.last_seen)}` : '';
+    const date = d.last_seen ? ` started ${formatDateTime(d.last_seen)}` : '';
     return `${i + 1}. **${truncate(d.title, EMBED_FIELD_MAX_LENGTH)}**${date}${bodyLine(d.body)}`;
   });
 
-  const description = truncate(lines.join('\n\n'), EMBED_DESCRIPTION_MAX_LENGTH);
-  return embed.setDescription(description).setFooter({ text: `${result.count} decision(s)` });
+  return embed.setDescription(truncate(lines.join('\n\n'), EMBED_DESCRIPTION_MAX_LENGTH));
 }
 
 export interface StatusData {
@@ -201,10 +197,7 @@ export function formatSearchResultsEmbed(
     `${i + 1}. **${truncate(r.title, EMBED_FIELD_MAX_LENGTH)}** [${r.type}] _(${r.status})_${bodyLine(r.body)}`,
   );
 
-  const description = truncate(lines.join('\n'), EMBED_DESCRIPTION_MAX_LENGTH);
-  return embed
-    .setDescription(description)
-    .setFooter({ text: `${results.length} result(s)` });
+  return embed.setDescription(truncate(lines.join('\n\n'), EMBED_DESCRIPTION_MAX_LENGTH));
 }
 
 export function formatCorrectionEmbed(
