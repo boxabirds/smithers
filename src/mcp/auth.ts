@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto';
 import type { Config } from '../config.js';
 
 const BEARER_PREFIX = 'Bearer ';
@@ -12,5 +13,8 @@ export function validateBearerToken(
   const token = authHeader.slice(BEARER_PREFIX.length).trim();
   if (!token) return false;
 
-  return token === config.mcp.authToken;
+  const expected = config.mcp.authToken;
+  if (token.length !== expected.length) return false;
+
+  return timingSafeEqual(Buffer.from(token), Buffer.from(expected));
 }

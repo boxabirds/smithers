@@ -27,6 +27,6 @@ COPY src/db/migrations/ src/db/migrations/
 USER app
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-  CMD node -e "process.exit(0)"
+  CMD node -e "fetch('http://localhost:${MCP_PORT:-3100}/health').then(r=>{if(!r.ok)throw 1}).catch(()=>process.exit(1))"
 
 ENTRYPOINT ["node", "dist/index.js"]

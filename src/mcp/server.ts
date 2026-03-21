@@ -138,8 +138,9 @@ export async function startMcpServer(config: Config, pool: pg.Pool): Promise<Mcp
       return;
     }
 
-    // Auth check for MCP endpoints
-    if (req.url === '/sse' || req.url === '/message') {
+    // Auth check for MCP endpoints (use pathname to ignore query params)
+    const pathname = new URL(req.url ?? '/', `http://${req.headers.host}`).pathname;
+    if (pathname === '/sse' || pathname === '/message') {
       if (!validateBearerToken(req.headers.authorization, config)) {
         res.writeHead(401, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Unauthorized' }));
@@ -148,9 +149,15 @@ export async function startMcpServer(config: Config, pool: pg.Pool): Promise<Mcp
     }
 
     // SSE endpoint
-    if (req.method === 'GET' && req.url === '/sse') {
+    if (req.method === 'GET' && pathname === '/sse') {
       const transport = new SSEServerTransport('/message', res);
       transports.set(transport.sessionId, transport);
+
+      // Clean up transport when the SSE connection closes
+      res.on('close', () => {
+        transports.delete(transport.sessionId);
+      });
+
       await mcp.connect(transport);
       return;
     }
